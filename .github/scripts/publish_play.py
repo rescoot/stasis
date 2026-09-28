@@ -37,6 +37,16 @@ def track_state(token, edit_id, track):
     return request(token, "GET", f"{BASE}/edits/{edit_id}/tracks/{track}")
 
 
+def release_ids(releases):
+    return sorted((item.get("status"), tuple(item.get("versionCodes", []))) for item in releases)
+
+
+def same_releases(before, after):
+    return sorted(json.dumps(item, sort_keys=True) for item in before.get("releases", [])) == sorted(
+        json.dumps(item, sort_keys=True) for item in after.get("releases", [])
+    )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--aab", required=True)
@@ -126,8 +136,8 @@ def main():
         f"{BASE}/edits/{edit_id}/tracks/{args.track}",
         json.dumps(release).encode(),
     )
-    expected = [(item.get("status"), item.get("versionCodes")) for item in releases]
-    staged_ids = [(item.get("status"), item.get("versionCodes")) for item in staged.get("releases", [])]
+    expected = release_ids(releases)
+    staged_ids = release_ids(staged.get("releases", []))
     if staged_ids != expected:
         raise RuntimeError(f"staged track has unexpected releases: {staged_ids}")
     request(token, "POST", f"{BASE}/edits/{edit_id}:commit")
@@ -139,12 +149,12 @@ def main():
     bundles = request(token, "GET", f"{BASE}/edits/{verify_id}/bundles").get("bundles", [])
     verified_bundle = next((item for item in bundles if item.get("versionCode") == args.version_code), None)
     production_after = track_state(token, verify_id, "production")
-    committed_ids = [(item.get("status"), item.get("versionCodes")) for item in verified_releases]
+    committed_ids = release_ids(verified_releases)
     if committed_ids != expected:
         raise RuntimeError(f"committed track has unexpected releases: {committed_ids}")
     if verified_bundle is None or verified_bundle.get("sha256") != digest:
         raise RuntimeError("committed bundle digest does not match the uploaded AAB")
-    if args.track != "production" and production_after != production_before:
+    if args.track != "production" and not same_releases(production_before, production_after):
         raise RuntimeError("production track changed while publishing a testing build")
 
     print(f"Published {args.name} ({args.version_code}) to {args.track}")
