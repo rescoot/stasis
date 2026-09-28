@@ -36,10 +36,10 @@ class PublishingTests(unittest.TestCase):
                 {"id": "first"},
                 {"releases": [live]},
                 {"versionCode": 212000001, "sha256": play.hashlib.sha256(b"bundle").hexdigest()},
-                {"releases": [live, {"status": "draft", "versionCodes": ["212000001"]}]},
+                {"releases": [{"status": "draft", "versionCodes": ["212000001"]}, live]},
                 {},
                 {"id": "second"},
-                {"releases": [live, {"status": "draft", "versionCodes": ["212000001"]}]},
+                {"releases": [{"status": "draft", "versionCodes": ["212000001"]}, live]},
                 {"bundles": [{"versionCode": 212000001, "sha256": play.hashlib.sha256(b"bundle").hexdigest()}]},
                 {"releases": [live, {"status": "draft", "versionCodes": ["212000001"]}]},
             ]
@@ -58,6 +58,14 @@ class PublishingTests(unittest.TestCase):
                 play.main()
             self.assertFalse(responses)
             self.assertEqual(["45"], play.json.loads(calls[3][2])["releases"][0]["versionCodes"])
+
+    def test_production_order_does_not_affect_safety_check(self):
+        live = {"name": "live", "status": "completed", "versionCodes": ["45"]}
+        draft = {"name": "next", "status": "draft", "versionCodes": ["46"]}
+        self.assertTrue(play.same_releases({"releases": [live, draft]},
+                                           {"releases": [draft, live]}))
+        self.assertFalse(play.same_releases({"releases": [live, draft]},
+                                            {"releases": [live]}))
 
     def test_transient_play_read_is_retried(self):
         unavailable = urllib.error.HTTPError(
