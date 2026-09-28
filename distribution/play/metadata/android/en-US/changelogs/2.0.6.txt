@@ -1,0 +1,1 @@
+Online location services now explains which providers handle destination search and address lookup. An English and German privacy policy is available from Settings and Support.
