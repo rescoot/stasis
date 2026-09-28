@@ -1,0 +1,68 @@
+name: CI
+
+# Analyze and test on every push and PR. Builds live in nightly.yaml (main)
+# and release.yaml (tags); this job only has to be fast enough that nobody
+# minds waiting for it.
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Test store publishing
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+
+      - name: Resolve and verify shared core
+        working-directory: packages/scooter_core
+        run: |
+          dart pub get
+          dart analyze
+          dart test
+
+      - name: Resolve and verify shared Flutter integration
+        working-directory: packages/scooter_flutter
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - run: flutter pub get
+
+      - run: flutter analyze
+
+      - run: flutter test
+
+      # analyze and test never parse assets, so a merge that leaves the locale
+      # files malformed ships an app that renders raw i18n keys.
+      - name: Validate JSON assets
+        run: |
+          python3 - <<'EOF'
+          import json, glob, sys
+          bad = []
+          for path in sorted(glob.glob('assets/**/*.json', recursive=True)):
+              try:
+                  json.load(open(path, encoding='utf-8'))
+              except Exception as e:
+                  bad.append(f"{path}: {e}")
+          for line in bad:
+              print(line)
+          sys.exit(1 if bad else 0)
+          EOF

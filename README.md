@@ -11,7 +11,7 @@ This app does not use any offical code by unu, but has since been endorsed and s
 
 ### Using this app
 
-If you just want to use this app, go into the "Releases" section on this page and download the latest APK file. The app is also available as proe-release through Google Play and Apple TestFlight, but that will change shortly.
+If you just want to use this app, go into the "Releases" section on this page and download the latest APK file. Store testing builds are published when the corresponding store accounts are configured.
 
 ### Building this app yourself
 
@@ -22,6 +22,8 @@ Run the following command in the root of this project to install and start the d
 ```
 flutter run
 ```
+
+For signing and store publishing, see [RELEASING.md](RELEASING.md).
 
 ### Contributing
 

@@ -1,0 +1,1 @@
+Add a scooter from a list showing signal strength and pairing status. Improve reconnection, destination names, and scooter settings. Add Tasker controls, a background battery optimization shortcut, and a mobile APN setting for supported scooters.
