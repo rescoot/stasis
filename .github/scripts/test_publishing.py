@@ -1,11 +1,13 @@
 import contextlib
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 HERE = Path(__file__).parent
@@ -56,6 +58,18 @@ class PublishingTests(unittest.TestCase):
                 play.main()
             self.assertFalse(responses)
             self.assertEqual(["45"], play.json.loads(calls[3][2])["releases"][0]["versionCodes"])
+
+    def test_transient_play_read_is_retried(self):
+        unavailable = urllib.error.HTTPError(
+            "https://example.test", 503, "Unavailable", {}, io.BytesIO(b"temporarily unavailable")
+        )
+        with patch.object(play.urllib.request, "urlopen", side_effect=[
+            unavailable, io.BytesIO(json.dumps({"track": "internal"}).encode())
+        ]) as open_url, patch.object(play.time, "sleep") as sleep:
+            result = play.request("test-token", "GET", "https://example.test")
+        self.assertEqual({"track": "internal"}, result)
+        self.assertEqual(2, open_url.call_count)
+        sleep.assert_called_once_with(1)
 
     def test_ios_signing_keeps_bundle_ids(self):
         original = Path("ios/Runner.xcodeproj/project.pbxproj").read_text()

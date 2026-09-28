@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -19,12 +20,17 @@ def request(token, method, url, body=None, content_type="application/json"):
     if body is not None:
         headers["Content-Type"] = content_type
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req) as response:
-            return json.load(response)
-    except urllib.error.HTTPError as error:
-        detail = error.read().decode(errors="replace")
-        raise RuntimeError(f"{method} {url}: {error.code} {detail}") from error
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(req) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            if method == "GET" and error.code in (429, 500, 502, 503, 504) and attempt < 5:
+                error.close()
+                time.sleep(min(2 ** attempt, 30))
+                continue
+            detail = error.read().decode(errors="replace")
+            raise RuntimeError(f"{method} {url}: {error.code} {detail}") from error
 
 
 def track_state(token, edit_id, track):
