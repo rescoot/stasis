@@ -9,6 +9,7 @@ import '../../domain/alarm_status.dart';
 import 'ls_keycard_screen.dart';
 import 'ls_ota_screen.dart';
 import 'ls_scheduled_hibernation_screen.dart';
+import 'sms_inbox_screen.dart';
 import '../../scooter_service.dart';
 import '../../state/vehicle_status.dart';
 
@@ -747,6 +748,13 @@ class _LsSettingsScreenState extends State<LsSettingsScreen> {
               Navigator.push(context, MaterialPageRoute(builder: (context) => LsScheduledHibernationScreen()));
             },
           ),
+        ListTile(
+          leading: const Icon(Icons.sms_outlined),
+          title: const Text('Messages'),
+          subtitle: const Text('Inbox and SMS forwarding'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SmsInboxScreen())),
+        ),
         if (!_connected || context.watch<ScooterService>().identity.supportsApnConfig == true)
           ListTile(
             leading: Icon(Icons.cell_tower_outlined),
