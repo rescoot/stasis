@@ -10,6 +10,7 @@ import 'ls_keycard_screen.dart';
 import 'ls_ota_screen.dart';
 import 'ls_scheduled_hibernation_screen.dart';
 import 'sms_inbox_screen.dart';
+import 'trip_history_screen.dart';
 import '../../scooter_service.dart';
 import '../../state/vehicle_status.dart';
 
@@ -754,6 +755,14 @@ class _LsSettingsScreenState extends State<LsSettingsScreen> {
           subtitle: const Text('Inbox and SMS forwarding'),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SmsInboxScreen())),
+        ),
+        ListTile(
+          leading: const Icon(Icons.history),
+          title: Text(switch (Localizations.localeOf(context).languageCode) {
+            'de' => 'Fahrtenverlauf', 'nl' => 'Ritgeschiedenis', 'fr' => 'Historique des trajets', _ => 'Trip history'
+          }),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TripHistoryScreen())),
         ),
         if (!_connected || context.watch<ScooterService>().identity.supportsApnConfig == true)
           ListTile(
