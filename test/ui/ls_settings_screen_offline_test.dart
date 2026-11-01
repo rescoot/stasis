@@ -265,6 +265,8 @@ void main() {
       await tester.pumpWidget(_screen(service));
       await tester.pumpAndSettle();
       await _show(tester, find.text('current-apn'));
+      await tester.ensureVisible(find.text('current-apn'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('current-apn'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'new-apn');
