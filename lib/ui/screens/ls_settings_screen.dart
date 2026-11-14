@@ -864,7 +864,7 @@ class _LsSettingsScreenState extends State<LsSettingsScreen> {
               ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => LsKeycardScreen()))
               : null,
         ),
-        if (!_connected || context.read<ScooterService>().otaAvailable)
+        if (_connected && context.read<ScooterService>().otaAvailable)
           ListTile(
             leading: Icon(Icons.system_update_alt_outlined),
             title: Text(FlutterI18n.translate(context, "ls_settings_ota_title")),
