@@ -22,9 +22,9 @@ import 'background/widget_handler.dart';
 
 Future<void> bootstrap() async {
   configureBundledFonts();
-  LogHelper().initialize();
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  await LogHelper().initialize();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
