@@ -111,9 +111,10 @@ class _BatteryTrackerScreenState extends State<BatteryTrackerScreen> {
       _error = null;
     });
     try {
-      final readings = nfc
-          ? [await (widget.readNfc?.call() ?? _nfc.read())]
-          : await (widget.readBluetooth?.call() ?? context.read<ScooterService>().actions.readBatteryIdentities());
+      final read = nfc
+          ? (widget.readNfc?.call() ?? _nfc.read()).then((reading) => [reading])
+          : (widget.readBluetooth?.call() ?? context.read<ScooterService>().actions.readBatteryIdentities());
+      final readings = await read;
       if (!mounted || generation != _readGeneration) return;
       final unique = <String, BatteryIdentity>{for (final reading in readings) reading.serialNumber: reading};
       setState(() {
