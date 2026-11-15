@@ -1,0 +1,1 @@
+Supportberichte enthalten aktuelle Protokolle und verfügbare Android-Absturzinformationen. Auf kompatiblen Rollern sind Fahrtenübersicht und Bluetooth-SMS verfügbar. Die Anleitung zur Akkuidentifikation wurde verbessert. Authentifizierung und Keycard-Anzeige wurden verbessert.

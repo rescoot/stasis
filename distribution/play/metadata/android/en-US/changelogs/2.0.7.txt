@@ -1,0 +1,1 @@
+Support reports include recent logs and available Android crash information. On compatible scooters, view trip history and Bluetooth SMS. Battery identification guidance has also been improved. This release also improves authentication and keycard display.
