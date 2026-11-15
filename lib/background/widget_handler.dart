@@ -18,6 +18,7 @@ import '../background/background_i18n.dart';
 import '../background/tasker_bridge.dart';
 import '../background/translate_static.dart';
 import '../domain/scooter_state.dart';
+import '../domain/widget_range.dart';
 
 // value cache
 bool _connected = false;
@@ -35,6 +36,13 @@ LatLng? _lastLocation;
 bool? _seatClosed;
 bool? _scooterLocked = true;
 String _lockStateName = "";
+
+Future<void> _updateRangeAndroidWidget() async {
+  if (!Platform.isAndroid) return;
+  await HomeWidget.updateWidget(
+    qualifiedAndroidName: 'de.freal.unustasis.RangeWidgetReceiver',
+  );
+}
 
 /// Pre-populates in-memory caches from existing HomeWidget data.
 /// Prevents passToWidget() from overwriting good widget data with
@@ -108,6 +116,7 @@ Future<void> updateWidgetPing() async {
     qualifiedAndroidName: 'de.freal.unustasis.HomeWidgetReceiver',
     iOSName: "ScooterWidget",
   );
+  await _updateRangeAndroidWidget();
   return;
 }
 
@@ -184,6 +193,10 @@ void passToWidget({
   await HomeWidget.saveWidgetData<String>("iOSlastPingText", _iOSlastPingText);
   await HomeWidget.saveWidgetData<int>("soc1", _primarySOC);
   await HomeWidget.saveWidgetData<int?>("soc2", _secondarySOC);
+  await HomeWidget.saveWidgetData<int?>(
+    "estimatedRangeKm",
+    estimatedWidgetRangeKm(_primarySOC, _secondarySOC),
+  );
   await HomeWidget.saveWidgetData<String>("scooterName", _scooterName);
   await HomeWidget.saveWidgetData<int>("scooterColor", _scooterColor);
   await HomeWidget.saveWidgetData<bool>("seatClosed", _seatClosed);
@@ -206,6 +219,7 @@ void passToWidget({
     await HomeWidget.updateWidget(
       qualifiedAndroidName: 'de.freal.unustasis.HomeWidgetReceiver',
     );
+    await _updateRangeAndroidWidget();
   } else if (Platform.isIOS && updateiOS) {
     await HomeWidget.setAppGroupId('group.de.freal.unustasis');
     await HomeWidget.updateWidget(
@@ -230,6 +244,7 @@ Future<void> setWidgetUnlocking(bool unlocking) async {
     qualifiedAndroidName: 'de.freal.unustasis.HomeWidgetReceiver',
     iOSName: "ScooterWidget",
   );
+  await _updateRangeAndroidWidget();
 }
 
 Future<void> setWidgetScanning(bool scanning) async {
@@ -249,6 +264,7 @@ Future<void> setWidgetScanning(bool scanning) async {
     qualifiedAndroidName: 'de.freal.unustasis.HomeWidgetReceiver',
     iOSName: "ScooterWidget",
   );
+  await _updateRangeAndroidWidget();
 }
 
 @pragma("vm:entry-point")
@@ -340,6 +356,7 @@ FutureOr<void> backgroundCallback(Uri? data) async {
     qualifiedAndroidName: 'de.freal.unustasis.HomeWidgetReceiver',
     iOSName: "ScooterWidget",
   );
+  await _updateRangeAndroidWidget();
 }
 
 @pragma('vm:entry-point')
