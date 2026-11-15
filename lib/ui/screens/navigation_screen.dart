@@ -16,6 +16,7 @@ import 'package:unustasis/geo_helper.dart';
 import 'package:unustasis/ui/widgets/header.dart';
 import 'package:unustasis/ui/widgets/wide_layout.dart';
 import 'package:unustasis/scooter_service.dart';
+import 'route_plan_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
   final NavDestination? initialDestination;
@@ -514,6 +515,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
   @override
   Widget build(BuildContext context) {
     final connected = context.select<ScooterService, bool>((s) => s.connected);
+    final routePlansAvailable =
+        context.select<ScooterService, bool>((s) => s.connected && s.identity.supportsRoutePlans);
     final content = Stack(
       children: [
         Column(
@@ -569,6 +572,16 @@ class _NavigationScreenState extends State<NavigationScreen> {
                       padding: const EdgeInsets.fromLTRB(48, 8, 48, 16),
                     ),
                   ),
+                  if (routePlansAvailable)
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      child: IconButton(
+                        tooltip: FlutterI18n.translate(context, 'nav_route_title'),
+                        onPressed: _openRoutePlan,
+                        icon: const Icon(Icons.route_outlined),
+                      ),
+                    ),
                   Positioned(
                     top: 0,
                     right: 0,
@@ -592,6 +605,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
         title: Text(FlutterI18n.translate(context, "nav_title")),
         forceMaterialTransparency: true,
         scrolledUnderElevation: 0,
+        actions: [
+          if (routePlansAvailable)
+            IconButton(
+              tooltip: FlutterI18n.translate(context, 'nav_route_title'),
+              onPressed: _openRoutePlan,
+              icon: const Icon(Icons.route_outlined),
+            ),
+        ],
       ),
       floatingActionButton: _osmConsent &&
               context.watch<ScooterService>().pendingNavigation == null &&
@@ -608,6 +629,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
       body: content,
     );
   }
+
+  Future<void> _openRoutePlan() => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const RoutePlanScreen()),
+      );
 
   Widget _searchField() {
     return Padding(
