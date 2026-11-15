@@ -397,15 +397,9 @@ class ScooterTelemetry {
       if (imxVersion != null) {
         // Only a librescoot system answers with a version over usock.
         _log.info('nRF ${identity.nrfVersion} runs a $imxVersion system');
-      } else if (repository.imxVersionCharacteristic != null &&
-          vehicle.systemCanAnswer) {
-        _log.info(
-            'nRF ${identity.nrfVersion} reported no system version, so this is not a librescoot scooter');
-        // Everything gated on librescoot follows the system, not the nRF.
-        identity.isLibrescoot = false;
+      } else {
+        _log.info('No system version answer; keeping the firmware identity');
       }
-      // A firmware without the characteristic, or one that is powered down, is
-      // expected to stay silent, so the nRF verdict stands.
     }
     effects.cachePatch(connection.id,
         TelemetryCachePatch(isLibrescoot: identity.isLibrescoot));
@@ -462,7 +456,8 @@ class ScooterTelemetry {
         _current(connection) && identical(_repository, repository);
     if (repository.gattTableMismatch ||
         repository.extendedChannelUnresponsive) {
-      _clearLsCapabilities(connection);
+      _log.info(
+          'Capability channel unavailable; keeping the cached capabilities');
       return;
     }
     queries.LsCapabilityGroups groups;
@@ -500,14 +495,15 @@ class ScooterTelemetry {
       supportsScheduledHibernation = value != null;
     } catch (e, stack) {
       effects.probeFailed("scheduled hibernation probe failed", e, stack);
-      supportsScheduledHibernation = false;
     }
     if (!current()) return;
-    identity.supportsScheduledHibernation = supportsScheduledHibernation;
-    effects.cachePatch(
-        connection.id,
-        TelemetryCachePatch(
-            supportsScheduledHibernation: supportsScheduledHibernation));
+    if (supportsScheduledHibernation != null) {
+      identity.supportsScheduledHibernation = supportsScheduledHibernation;
+      effects.cachePatch(
+          connection.id,
+          TelemetryCachePatch(
+              supportsScheduledHibernation: supportsScheduledHibernation));
+    }
     if (!_publishTableState(connection, repository)) return;
 
     final supportsApnConfig = groups.contains('config');
@@ -519,17 +515,18 @@ class ScooterTelemetry {
         TelemetryCachePatch(supportsApnConfig: supportsApnConfig));
     if (!_publishTableState(connection, repository)) return;
 
-    bool supportsBondForget = groups.contains('ble');
+    bool? supportsBondForget = groups.usedFallback && groups.contains('ble')
+        ? identity.supportsBondForget
+        : groups.contains('ble');
     // `ble` is complete in cap:ext. Legacy cap:list only reports categories,
     // so it still needs the one historically variable detail query.
-    if (groups.usedFallback && supportsBondForget) {
+    if (groups.usedFallback && groups.contains('ble')) {
       try {
         final caps =
             await _capabilities(scooter, repository, 'ble', isCurrent: current);
         supportsBondForget = caps.contains('forget');
       } catch (e, stack) {
         effects.probeFailed('ble capability probe failed', e, stack);
-        supportsBondForget = false;
       }
     }
     if (!current()) return;
@@ -551,14 +548,15 @@ class ScooterTelemetry {
       supportsBatteryKeepActive = value != null;
     } catch (e, stack) {
       effects.probeFailed("battery keep-active probe failed", e, stack);
-      supportsBatteryKeepActive = false;
     }
     if (!current()) return;
-    identity.supportsBatteryKeepActive = supportsBatteryKeepActive;
-    effects.cachePatch(
-        connection.id,
-        TelemetryCachePatch(
-            supportsBatteryKeepActive: supportsBatteryKeepActive));
+    if (supportsBatteryKeepActive != null) {
+      identity.supportsBatteryKeepActive = supportsBatteryKeepActive;
+      effects.cachePatch(
+          connection.id,
+          TelemetryCachePatch(
+              supportsBatteryKeepActive: supportsBatteryKeepActive));
+    }
     if (!_publishTableState(connection, repository)) return;
 
     final supportsAlarmControl = groups.contains('alarm');
@@ -579,6 +577,7 @@ class ScooterTelemetry {
         TelemetryCachePatch(
             supportsAlarmControl: supportsAlarmControl,
             supportsTripCounter: supportsTripCounter));
+    var tripExpungeAnswered = false;
     if (identity.supportsTripCounter == true) {
       try {
         final value = await _setting(
@@ -588,6 +587,7 @@ class ScooterTelemetry {
           isCurrent: current,
         );
         if (!current()) return;
+        tripExpungeAnswered = true;
         if (value == null) {
           identity.supportsTripExpunge = false;
         } else {
@@ -596,16 +596,20 @@ class ScooterTelemetry {
         }
       } catch (e, stack) {
         effects.probeFailed('trip retention probe failed', e, stack);
-        identity.supportsTripExpunge = false;
       }
     } else {
+      tripExpungeAnswered = true;
       identity.supportsTripExpunge = false;
     }
     if (!current()) return;
-    // Retention decides whether its row is offered at all, so cache the answer
-    // rather than let a failed probe hide it for the session.
-    effects.cachePatch(connection.id,
-        TelemetryCachePatch(supportsTripExpunge: identity.supportsTripExpunge));
+    // Only cache a confirmed result; transport failures leave the previous
+    // capability intact for this session and the next one.
+    if (tripExpungeAnswered) {
+      effects.cachePatch(
+          connection.id,
+          TelemetryCachePatch(
+              supportsTripExpunge: identity.supportsTripExpunge));
+    }
     identity.bluetoothTableOutOfDate = _bluetoothTableOutOfDate(repository);
     _notify(connection);
     if (identity.supportsTripCounter == true && current()) {
@@ -624,11 +628,10 @@ class ScooterTelemetry {
       SessionConnection connection, CharacteristicRepository repo) {
     if (!_current(connection) || !identical(_repository, repo)) return false;
     identity.bluetoothTableOutOfDate = _bluetoothTableOutOfDate(repo);
-    // Mid-probe silence means the answers still to come will never arrive, so
-    // drop the capabilities rather than leaving the cached ones standing.
+    // A dead channel invalidates the current probe, not the last confirmed
+    // capability answer.
     final usable =
         !(repo.gattTableMismatch || repo.extendedChannelUnresponsive);
-    if (!usable) _clearLsCapabilities(connection);
     _notify(connection);
     // A listener can invalidate the connection while being notified.
     if (!_current(connection) || !identical(_repository, repo)) return false;

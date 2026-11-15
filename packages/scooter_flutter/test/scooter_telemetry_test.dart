@@ -793,31 +793,36 @@ void main() {
     await _flush();
 
     expect(h.telemetry.identity.imxVersion, isNull);
-    expect(h.telemetry.identity.isLibrescoot, false);
+    expect(h.telemetry.identity.isLibrescoot, true);
     final verdictPatch = h.effects.patches.lastWhere(
       (patch) => patch.$1 == 'B' && patch.$2.isLibrescoot != null,
     );
-    expect(verdictPatch.$2.isLibrescoot, false);
+    expect(verdictPatch.$2.isLibrescoot, true);
   });
 
-  test('a stock system behind a librescoot nRF clears the capabilities',
+  test('an unanswered system-version query preserves cached capabilities',
       () async {
-    // The nRF is a librescoot build, and stays one after a stock image is
-    // flashed; stock firmware never answers the version query.
+    // A missing system-version response cannot override the confirmed nRF
+    // firmware identity or clear capabilities cached from that firmware.
     final h = _Harness(imxVersion: '');
     addTearDown(h.dispose);
     final r = await h.connect('A');
     h.telemetry.identity
+      ..isLibrescoot = true
       ..supportsAlarmControl = true
       ..supportsApnConfig = true
       ..supportsTripCounter = true;
+    r['state'].text('off');
     _firmware(r);
     await _flush();
 
-    expect(_caps(h.telemetry.identity), List.filled(8, false));
+    expect(h.telemetry.identity.supportsAlarmControl, true);
+    expect(h.telemetry.identity.supportsApnConfig, true);
+    expect(h.telemetry.identity.supportsTripCounter, true);
     expect(h.queries, isEmpty,
-        reason: 'a stock system is not probed for librescoot services');
-    expect(h.telemetry.identity.isLibrescoot, false);
+        reason:
+            'an unanswered system query does not trigger capability probes');
+    expect(h.telemetry.identity.isLibrescoot, true);
   });
 
   test('a librescoot system behind the nRF is probed as usual', () async {
@@ -834,15 +839,15 @@ void main() {
     expect(h.telemetry.identity.isLibrescoot, true);
   });
 
-  test('a system that answers without a version is stock', () async {
+  test('a missing system version does not discard firmware identity', () async {
     final h = _Harness(imxVersion: '');
     addTearDown(h.dispose);
     final r = await h.connect('A');
     _firmware(r);
     await _flush();
 
-    expect(h.queries, isEmpty);
-    expect(h.telemetry.identity.isLibrescoot, false);
+    expect(h.queries, _queryOrder);
+    expect(h.telemetry.identity.isLibrescoot, true);
   });
 
   test('a hibernating system keeps the cached capabilities', () async {
@@ -915,13 +920,13 @@ void main() {
     expect(_caps(h.telemetry.identity), List.filled(8, false));
   });
 
-  test('a channel that stops answering clears the cached capabilities',
+  test('a channel that stops answering preserves cached capabilities',
       () async {
     final h = _Harness();
     addTearDown(h.dispose);
     final r = await h.connect('A');
-    // Everything the last nightly session cached, as if the scooter still ran
-    // librescoot: the probe must not leave these standing when nothing answers.
+    // A dead channel cannot confirm that a previously supported feature has
+    // disappeared.
     h.telemetry.identity
       ..supportsHibernateFor = true
       ..supportsScheduledHibernation = true
@@ -935,12 +940,18 @@ void main() {
     _firmware(r);
     await _flush();
 
-    expect(_caps(h.telemetry.identity), List.filled(8, false));
+    expect(h.telemetry.identity.supportsHibernateFor, true);
+    expect(h.telemetry.identity.supportsScheduledHibernation, true);
+    expect(h.telemetry.identity.supportsApnConfig, true);
+    expect(h.telemetry.identity.supportsAlarmControl, true);
+    expect(h.telemetry.identity.supportsTripCounter, true);
+    expect(h.telemetry.identity.supportsBatteryKeepActive, true);
     expect(h.queries, isEmpty, reason: 'a dead channel is not probed');
-    final patch = h.effects.patches.last.$2;
-    expect(patch.supportsAlarmControl, false);
-    expect(patch.supportsApnConfig, false);
-    expect(patch.supportsTripCounter, false);
+    expect(
+        h.effects.patches.where((patch) =>
+            patch.$2.supportsApnConfig != null ||
+            patch.$2.supportsAlarmControl != null),
+        isEmpty);
   });
 
   test('queued capability probe cannot write after Service Changed rebuild',
@@ -968,36 +979,48 @@ void main() {
     expect(channel.writes, isEmpty);
   });
 
-  test(
-      'actual shared default queries fail closed when extended group is absent',
-      () async {
+  test('missing extended group leaves capability support unknown', () async {
     final h = _Harness(defaultQueries: true);
     addTearDown(h.dispose);
     final r = await h.connect('A');
     _firmware(r);
     await _flush();
-    expect(_caps(h.telemetry.identity), List.filled(8, false));
-    expect(h.effects.patches.length, 7);
+    expect(_caps(h.telemetry.identity), List.filled(8, null));
+    expect(h.effects.patches.length, 1);
   });
 
-  test(
-      'failed or unsupported probes continue sequentially and replace cached true values with false',
-      () async {
+  test('failed detail probes preserve confirmed capabilities', () async {
     final h = _Harness(
-        caps: (_) async => throw StateError('failed'),
-        setting: (_) async => null);
+      groups: const {'pm', 'config', 'ble', 'alarm', 'trip'},
+      setting: (_) async => throw TimeoutException('no response'),
+    );
     addTearDown(h.dispose);
     final r = await h.connect('A');
-    h.telemetry.identity.supportsHibernateFor = true;
-    h.telemetry.identity.supportsApnConfig = true;
+    h.telemetry.identity
+      ..supportsScheduledHibernation = true
+      ..supportsBatteryKeepActive = true
+      ..supportsTripExpunge = true;
     _firmware(r);
     await _flush();
-    expect(h.queries, _queryOrder);
-    expect(_caps(h.telemetry.identity), List.filled(8, false));
-    expect(h.effects.patches.map((p) => p.$2.supportsHibernateFor).nonNulls,
-        [false]);
+    expect(h.queries, [
+      'cap:ext',
+      'pm.scheduled-hibernate-enabled',
+      'scooter.battery-keep-active-on-seatbox-open',
+      'trip.expunge',
+    ]);
+    expect(h.telemetry.identity.supportsHibernateFor, isTrue);
+    expect(h.telemetry.identity.supportsApnConfig, isTrue);
+    expect(h.telemetry.identity.supportsAlarmControl, isTrue);
+    expect(h.telemetry.identity.supportsTripCounter, isTrue);
+    expect(h.telemetry.identity.supportsScheduledHibernation, isTrue);
+    expect(h.telemetry.identity.supportsBatteryKeepActive, isTrue);
+    expect(h.telemetry.identity.supportsTripExpunge, isTrue);
     expect(
-        h.effects.patches.map((p) => p.$2.supportsApnConfig).nonNulls, [false]);
+        h.effects.patches.where((patch) =>
+            patch.$2.supportsScheduledHibernation == false ||
+            patch.$2.supportsBatteryKeepActive == false ||
+            patch.$2.supportsTripExpunge == false),
+        isEmpty);
   });
 
   for (final position in [0, 1, 2]) {

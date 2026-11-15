@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scooter_core/extended_response.dart';
 import 'package:scooter_core/trip_expunge.dart';
 import 'package:scooter_flutter/scooter_flutter.dart';
 
@@ -105,7 +106,7 @@ void main() {
     expect(channel.writes, ['cap:ext', 'cap:list']);
   });
 
-  test('cap:list fails closed for malformed counted categories', () async {
+  test('malformed cap:list does not confirm absence of capabilities', () async {
     channel.repliesFor['cap:ext'] = ['error:unknown command'];
     channel.repliesFor['cap:list'] = [
       'cap:count:2',
@@ -115,7 +116,7 @@ void main() {
     final groups = await discoverLsCapabilityGroupsCommand(device, repo);
     expect(groups.versions, isEmpty);
     expect(groups.usedFallback, isTrue);
-    expect(groups.answered, isTrue);
+    expect(groups.answered, isFalse);
   });
 
   test('a silent capability query reports no answer, not an empty list',
@@ -181,6 +182,22 @@ void main() {
     expect(await getLsCapabilitiesCommand(device, repo, 'config'), isEmpty);
   });
 
+  test('capability timeout is an unknown result, not an empty set', () async {
+    await expectLater(
+      getLsCapabilitiesCommand(device, repo, 'config',
+          responseTimeout: const Duration(milliseconds: 1)),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
+
+  test('malformed capability count is rejected', () async {
+    channel.replies = ['cap:config:bad-count'];
+    await expectLater(
+      getLsCapabilitiesCommand(device, repo, 'config'),
+      throwsA(isA<ExtendedResponseFormatException>()),
+    );
+  });
+
   test('trip commands parse zero and reject negative acknowledgements',
       () async {
     channel.replies = [
@@ -239,6 +256,21 @@ void main() {
     expect(await getLsSettingCommand(device, repo, 'example'), '');
     channel.replies = ['get:error:unknown key'];
     expect(await getLsSettingCommand(device, repo, 'example'), isNull);
+    channel.replies = ['error:unknown command'];
+    expect(await getLsSettingCommand(device, repo, 'example'), isNull);
+  });
+
+  test('setting timeout and malformed response remain unknown', () async {
+    await expectLater(
+      getLsSettingCommand(device, repo, 'example',
+          responseTimeout: const Duration(milliseconds: 1)),
+      throwsA(isA<TimeoutException>()),
+    );
+    channel.replies = ['get:other:value'];
+    await expectLater(
+      getLsSettingCommand(device, repo, 'example'),
+      throwsA(isA<ExtendedResponseFormatException>()),
+    );
   });
 
   test('trip retention uses the generic atomic setting transport', () async {
